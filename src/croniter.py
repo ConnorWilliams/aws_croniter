@@ -318,7 +318,8 @@ class croniter(object):
             for wday, nth in nth_weekday_of_month.items():
                 w = (wday + 6) % 7
                 c = calendar.Calendar(w).monthdayscalendar(d.year, d.month)
-                if c[0][0] == 0: c.pop(0)
+                if c[0][0] == 0:
+                    c.pop(0)
                 for n in nth:
                     if len(c) < n:
                         continue
@@ -505,7 +506,9 @@ class croniter(object):
                         low = "{0}".format(cls._alphaconv(i, low, expressions))
 
                     if not any_int_re.search(high):
-                        high = "{0}".format(cls._alphaconv(i, high, expressions))
+                        high = "{0}".format(cls._alphaconv(
+                            i, high, expressions)
+                        )
 
                     if (
                         not low or not high or int(low) > int(high)
@@ -516,8 +519,10 @@ class croniter(object):
 
                     low, high, step = map(int, [low, high, step])
                     rng = range(low, high + 1, step)
-                    e_list += (["{0}#{1}".format(item, nth) for item in rng]
-                        if i == 4 and nth else rng)
+                    e_list += (
+                        ["{0}#{1}".format(item, nth) for item in rng]
+                        if i == 4 and nth else rng
+                    )
                 else:
                     if t.startswith('-'):
                         raise CroniterBadCronError(
