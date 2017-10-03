@@ -1,0 +1,3 @@
+{
+  "tests/test_aws_croniter.py::TestGetNext::()::test_get_next[* * * * * *-expected0]": true
+}
