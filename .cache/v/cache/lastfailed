@@ -1,3 +1,10 @@
 {
-  "tests/test_aws_croniter.py::TestGetNext::()::test_get_next[* * * * * *-expected0]": true
+  "tests/test_aws_croniter.py::TestExpand::()::test_expand[5-50/10 * * * * thu#3 *-expected2]": true,
+  "tests/test_aws_croniter.py::TestExpand::()::test_expand[start_time0-* * * * * * *-expected0]": true,
+  "tests/test_aws_croniter.py::TestExpand::()::test_expand[start_time0-* * * * * *-expected0]": true,
+  "tests/test_aws_croniter.py::TestExpand::()::test_expand[start_time1-20 * * * * *-expected1]": true,
+  "tests/test_aws_croniter.py::TestExpand::()::test_expand[start_time2-* * * * thu#3 *-expected2]": true,
+  "tests/test_aws_croniter.py::TestGetNext::()::test_get_next[* * * * * *-expected0]": true,
+  "tests/test_aws_croniter.py::TestGetNext::()::test_get_next[start_time0-* * * * * *-expected0]": true,
+  "tests/test_aws_croniter.py::TestGetNext::()::test_get_next[start_time1-20 * * * * *-expected1]": true
 }
