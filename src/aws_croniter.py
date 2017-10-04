@@ -103,7 +103,7 @@ class CronExpression(object):
                 '''
             )
 
-        self.expanded_expression = self.expand(self.fields)
+        self.expanded_expression, self.day_wk_numbers = self.expand(self.fields)
         return None
 
     @classmethod
@@ -113,11 +113,13 @@ class CronExpression(object):
         """
 
         expanded_fields = []
-        nth_weekday_of_month = {}
+        day_wk_numbers = {}
 
         for field_name, field in zip(FIELD_NAMES, fields):
-            expanded_fields.append(self.expand_field(field_name, field))
-        return expanded_fields
+            expanded_field, field_day_wk_numbers = self.expand_field(field_name, field)
+            expanded_fields.append(expanded_field)
+            day_wk_numbers.update(field_day_wk_numbers)
+        return expanded_fields, day_wk_numbers
 
     @classmethod
     def expand_field(self, field_name, field):
@@ -131,38 +133,59 @@ class CronExpression(object):
 
         values = field.split(',')
         for value in values:
-            field_execution_times += self.expand_value(field_name, value)
+            value_execution_times, day_wk_numbers = self.expand_value(field_name, value)
+            field_execution_times += value_execution_times
 
         field_execution_times.sort()
-        return field_execution_times
+        return field_execution_times, day_wk_numbers
 
     @classmethod
     def expand_value(self, field_name, value):
+        """
+            Recursive boi
+        """
         # Convert month or day names to their corresponding integers
         value = self.calendar_to_num(field_name, value)
+        day_wk_numbers = {}
 
-        # If we have an increment but not a range, translate to a range.
+        if field_name == 'day_of_week':
+            if '#' in value:
+                value, pound, wk_numbers = value.partition('#')
+                expanded_value, tmp = self.expand_value('', value)
+                expanded_wk_numbers, tmp = self.expand_value('', wk_numbers)
+                for day in expanded_value:
+                    if day not in day_wk_numbers:
+                        day_wk_numbers[day] = set()
+                    for wk_number in expanded_wk_numbers:
+                        day_wk_numbers[day].add(int(wk_number))
+
+        # If we have an increment but not a range
         if '/' in value:
             value, slash, increment = value.partition('/')
             if '-' not in value:
+                # Translate to a range.
                 value = self.convert_to_range(value, field_name)
             low, high = value.split('-')
             low, high, increment = map(int, [low, high, increment])
-            return list(range(low, high+1, increment))
+            return list(range(low, high+1, increment)), day_wk_numbers
 
         # If we just have a range:
         elif '-' in value:
             low, high = value.split('-')
             low, high = map(int, [low, high])
-            return list(range(low, high+1))
+            return list(range(low, high+1)), day_wk_numbers
 
         # If we just have a number
         elif value.isdigit():
-            return [int(value)]
+            return [int(value)], day_wk_numbers
 
-        # If we have a character
+        # If we have l
+        elif value.lower() == 'l':
+            return [self.RANGES[field_name]['max']], day_wk_numbers
+
+        # If we have * or ?
         else:
-            return [value]
+            return '*', day_wk_numbers
 
     @classmethod
     def convert_to_range(self, value, field_name):
@@ -179,6 +202,11 @@ class CronExpression(object):
 
     @classmethod
     def calendar_to_num(self, field_name, value):
+        pound = ''
+        wk_numbers = ''
+        if '#' in value:
+            value, pound, wk_numbers = value.partition('#')
+
         if field_name in ['month', 'day_of_week']:
             value, slash, increment = value.partition('/')
             low, dash, high = value.partition('-')
@@ -191,7 +219,7 @@ class CronExpression(object):
                 high = self.CALENDAR[high]
 
             low, high = map(str, [low, high])
-            return low+dash+high+slash+increment
+            return low+dash+high+slash+increment+pound+wk_numbers
         else:
             return value
 

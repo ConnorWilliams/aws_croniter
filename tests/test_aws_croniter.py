@@ -33,9 +33,10 @@ class TestExpand(object):
                     ['*'],
                     ['*'],
                     ['*'],
-                    ['?'],
+                    ['*'],
                     ['*']
-                ]
+                ],
+                {}
             )
         ),
         (
@@ -47,9 +48,10 @@ class TestExpand(object):
                     [5, 10, 15, 20],
                     [10, 11, 12, 13, 14, 15, 16],
                     [2, 4, 6, 8, 10],
-                    ['?'],
+                    ['*'],
                     [2018]
-                ]
+                ],
+                {}
             )
         ),
         (
@@ -61,9 +63,45 @@ class TestExpand(object):
                     [1, 3, 5, 18, 21],
                     [1, 2, 3, 4, 5, 10, 11, 12, 13],
                     [1, 3, 5, 8, 9, 10, 11],
-                    ['?'],
+                    ['*'],
                     ['*']
-                ]
+                ],
+                {}
+            )
+        ),
+        (
+            "0 0 * ? * THU#3 *",
+            (
+                [
+                    [0],
+                    [0],
+                    ['*'],
+                    ['*'],
+                    ['*'],
+                    [5],
+                    ['*']
+                ],
+                {5:{3}}
+            )
+        ),
+        (
+            "0 0 * ? * Mon-ThU#1-3 *",
+            (
+                [
+                    [0],
+                    [0],
+                    ['*'],
+                    ['*'],
+                    ['*'],
+                    [2, 3, 4, 5],
+                    ['*']
+                ],
+                {
+                    2:{1,2,3},
+                    3:{1,2,3},
+                    4:{1,2,3},
+                    5:{1,2,3},
+                }
             )
         ),
     ])
@@ -76,16 +114,16 @@ class TestExpand(object):
 class TestExpandField(object):
     @pytest.mark.parametrize("expression, field_name, field, expected", [
         (
-            "* * * * * ? *", 'minute', '5-10', [5, 6, 7, 8, 9, 10]
+            "* * * * * ? *", 'minute', '5-10', ([5, 6, 7, 8, 9, 10],{})
         ),
         (
-            "* * * * * ? *", 'day_of_week', 'mon-wed', [2, 3, 4]
+            "* * * * * ? *", 'day_of_week', 'mon-wed', ([2, 3, 4],{})
         ),
         (
-            "* * * * * ? *", 'day_of_week', 'sUn-thU', [1, 2, 3, 4, 5]
+            "* * * * * ? *", 'day_of_week', 'sUn-thU', ([1, 2, 3, 4, 5],{})
         ),
         (
-            "* * * * * ? *", 'day_of_week', 'sUn-thU/2', [1, 3, 5]
+            "* * * * * ? *", 'day_of_week', 'sUn-thU/2', ([1, 3, 5],{})
         ),
     ])
     def test_expand_field(self, expression, field_name, field, expected):
@@ -119,6 +157,12 @@ class TestCalendarToNum(object):
         ),
         (
             '* * * * * ? *', '1', 'minute', '1'
+        ),
+        (
+            '0 0 * ? * THU#3 *', 'THU#3', 'day_of_week', '5#3'
+        ),
+        (
+            '0 0 * ? * Mon-ThU#1-3 *', 'Mon-ThU#1-3', 'day_of_week', '2-5#1-3'
         ),
     ])
     def test_expand(self, expression,  value, field_name, expected):
