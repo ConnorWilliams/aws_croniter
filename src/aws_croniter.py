@@ -112,7 +112,7 @@ class CronExpression(object):
             Expands the provided cron expression
         """
 
-        expanded = []
+        expanded_fields = []
         nth_weekday_of_month = {}
 
         for field_name, field in zip(FIELD_NAMES, fields):
@@ -120,134 +120,143 @@ class CronExpression(object):
                 field_name,
                 field
             ))
+            expanded_field, field_nth_weekday_of_month = self.expand_field(field_name, field)
+            expanded_fields.append(expanded_field)
+            nth_weekday_of_month.update(field_nth_weekday_of_month)
 
-            if field == None:
-                expanded.append([0])
-                continue
+        return expanded_fields, nth_weekday_of_month
 
-            execution_times = []
 
-            field_list = field.split(',')
-            for value in field_list:
+    @classmethod
+    def expand_field(self, field_name, field):
+        """
+            Expands the provided field
+        """
+        if field == None:
+            return [0], {}
 
-                if field_name == 'day_of_week':
-                    value, separator, nth = str(value).partition('#')
-                    if nth and not 1 <= int(nth) <= 5:
-                        raise CroniterBadDateError(
-                            "A month must have between 1\
-                            and 5 of each weekday."
-                        )
+        execution_times = []
+        nth_weekday_of_month = {}
 
-                # Replace */something with min-max/something.
-                # So */10 in the minutes field should be 0-59/10
-                star_slash_replaced = re.sub(
-                    r'^\*(\/.+)$',  # Matches */something
-                    r'%d-%d\1' % (
-                        self.RANGES[field_name]['min'],
+        values = field.split(',')
+        for value in values:
+
+            if field_name == 'day_of_week':
+                value, separator, nth = str(value).partition('#')
+                if nth and not 1 <= int(nth) <= 5:
+                    raise CroniterBadDateError(
+                        "A month must have between 1\
+                        and 5 of each weekday."
+                    )
+
+            # Replace */something with min-max/something.
+            # So */10 in the minutes field should be 0-59/10
+            star_slash_replaced = re.sub(
+                r'^\*(\/.+)$',  # Matches */something
+                r'%d-%d\1' % (
+                    self.RANGES[field_name]['min'],
+                    self.RANGES[field_name]['max']
+                ),  # Matches MIN-MAX/something
+                str(value)
+            )
+            matches = re_range_optional_slash.search(star_slash_replaced)
+
+            # If the value is not min-max/something
+            if not matches:
+                # Replace something/somthing with something-max/something.
+                # So 5/10 in the minutes field should be 5-59/10
+                slash_replaced = re.sub(
+                    r'^(.+)\/(.+)$',  # Matches something/somthing
+                    r'\1-%d/\2' % (
                         self.RANGES[field_name]['max']
-                    ),  # Matches MIN-MAX/something
+                    ),  # Matches something-MAX/somthing
                     str(value)
                 )
-                matches = re_range_optional_slash.search(star_slash_replaced)
+                matches = re_range_optional_slash.search(slash_replaced)
 
-                # If the value is not min-max/something
-                if not matches:
-                    # Replace something/somthing with something-max/something.
-                    # So 5/10 in the minutes field should be 5-59/10
-                    slash_replaced = re.sub(
-                        r'^(.+)\/(.+)$',  # Matches something/somthing
-                        r'\1-%d/\2' % (
-                            self.RANGES[field_name]['max']
-                        ),  # Matches something-MAX/somthing
-                        str(value)
+            # If the value now is something-max/something'
+            if matches:
+                (low, high, step) = matches.group(1), matches.group(2),\
+                                    matches.group(4) or 1
+
+                # Sun=1, Mon=2, Jan=1, Jun=6
+                if not low[0].isdigit():
+                    low = self._calendar_to_num(field_name, low)
+                if not high[0].isdigit():
+                    high = self._calendar_to_num(field_name, high)
+
+                try:
+                    low, high, step = map(int, [low, high, step])
+                except CroniterBadDateError:
+                    raise CroniterBadDateError(
+                        "[{0}] is not acceptable.".format(expression)
                     )
-                    matches = re_range_optional_slash.search(slash_replaced)
 
-                # If the value now is something-max/something'
-                if matches:
-                    (low, high, step) = matches.group(1), matches.group(2),\
-                                        matches.group(4) or 1
+                value_execution_times = range(low, high + 1, step)
 
-                    # Sun=1, Mon=2, Jan=1, Jun=6
-                    if not low[0].isdigit():
-                        low = self._calendar_to_num(field_name, low)
-                    if not high[0].isdigit():
-                        high = self._calendar_to_num(field_name, high)
-
-                    try:
-                        low, high, step = map(int, [low, high, step])
-                    except CroniterBadDateError:
-                        raise CroniterBadDateError(
-                            "[{0}] is not acceptable.".format(expression)
-                        )
-
-                    value_execution_times = range(low, high + 1, step)
-
-                    # If weekday then use int#nth or int#None
-                    # else just numbers in range
-                    if field_name == 'day_of_week' and nth:
-                        field_list += [
-                            "{0}#{1}".format(execution_time, nth)
-                            for execution_time in value_execution_times
-                        ]
-                    else:
-                        field_list += value_execution_times
-
-                # Else if value is just * or an int or a word
+                # If weekday then use int#nth or int#None
+                # else just numbers in range
+                if field_name == 'day_of_week' and nth:
+                    values += [
+                        "{0}#{1}".format(execution_time, nth)
+                        for execution_time in value_execution_times
+                    ]
                 else:
-                    if slash_replaced.startswith('-'):
-                        raise CroniterBadCronError(
-                            "[{0}] is not acceptable,\
-                            negative numbers not allowed".format(
-                                expression
-                            )
+                    values += value_execution_times
+
+            # Else if value is just * or an int or a word
+            else:
+                if slash_replaced.startswith('-'):
+                    raise CroniterBadCronError(
+                        "[{0}] is not acceptable,\
+                        negative numbers not allowed".format(
+                            expression
                         )
+                    )
 
-                    # If its a word replace word with int
-                    if not star_or_int_re.search(slash_replaced):
-                        slash_replaced = self._calendar_to_num(
-                            field_name,
-                            slash_replaced
+                # If its a word replace word with int
+                if not star_or_int_re.search(slash_replaced):
+                    slash_replaced = self._calendar_to_num(
+                        field_name,
+                        slash_replaced
+                    )
+
+                # Turn to int
+                try:
+                    slash_replaced = int(slash_replaced)
+                except:
+                    pass
+
+                # If cycle to first day of week/month
+                if slash_replaced in self.RANGES[field_name]:
+                    slash_replaced =\
+                        self.RANGES[field_name][slash_replaced]
+
+                # If out of range raise error
+                if (
+                    slash_replaced not in ["*", "l"] and (
+                        int(slash_replaced) < self.RANGES[field_name]['min']
+                        or
+                        int(slash_replaced) > self.RANGES[field_name]['max']
+                    )
+                ):
+                    raise CroniterBadCronError(
+                        "[{0}] is not acceptable, out of range".format(
+                            field
                         )
+                    )
 
-                    # Turn to int
-                    try:
-                        slash_replaced = int(slash_replaced)
-                    except:
-                        pass
+                # Append to results for this expression
+                execution_times.append(slash_replaced)
 
-                    # If cycle to first day of week/month
-                    if slash_replaced in self.RANGES[field_name]:
-                        slash_replaced =\
-                            self.RANGES[field_name][slash_replaced]
+                # If repeating weekday
+                if field_name == 'day_of_week' and nth:
+                    if slash_replaced not in nth_weekday_of_month:
+                        nth_weekday_of_month[slash_replaced] = set()
+                    nth_weekday_of_month[slash_replaced].add(int(nth))
 
-                    # If out of range raise error
-                    if (
-                        slash_replaced not in ["*", "l"] and (
-                            int(slash_replaced) < self.RANGES[field_name]['min']
-                            or
-                            int(slash_replaced) > self.RANGES[field_name]['max']
-                        )
-                    ):
-                        raise CroniterBadCronError(
-                            "[{0}] is not acceptable, out of range".format(
-                                expression
-                            )
-                        )
-
-                    # Append to results for this expression
-                    execution_times.append(slash_replaced)
-
-                    # If repeating weekday
-                    if field_name == 'day_of_week' and nth:
-                        if slash_replaced not in nth_weekday_of_month:
-                            nth_weekday_of_month[slash_replaced] = set()
-                        nth_weekday_of_month[slash_replaced].add(int(nth))
-
-            execution_times.sort()
-            expanded.append(execution_times)
-
-        return expanded, nth_weekday_of_month
+        execution_times.sort()
+        return execution_times, nth_weekday_of_month
 
 
 class croniter(object):
