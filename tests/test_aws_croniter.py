@@ -2,25 +2,28 @@ import pytest
 
 from datetime import datetime
 
-from src.aws_croniter import CronExpression
+from src.aws_croniter import CronExpression, Croniter
 
-# class TestGetNext(object):
-#     @pytest.mark.parametrize("start_time, expression, expected", [
-#         (
-#             datetime(2017, 1, 1, 0, 0, 0),
-#             "* * * * * *",
-#             datetime(2017, 1, 1, 0, 0, 1)
-#         ),
-#         (
-#             datetime(2017, 1, 1, 0, 0, 0),
-#             "20 * * * * *",
-#             datetime(2017, 1, 1, 0, 20, 0)
-#         ),
-#     ])
-#     def test_get_next(self, start_time, expression, expected):
-#         awscron_iter = croniter(expression, start_time, return_type=float, day_or=True)
-#         result = awscron_iter.get_next(return_type=datetime)
-#         assert result == expected
+class TestExecutesBetween(object):
+    @pytest.mark.parametrize("expression, date_1, date_2, expected", [
+        (
+            "2 * * ? * * *",
+            "2017 1 1 0 0 1",
+            "2017 1 1 0 0 3",
+            True
+        ),
+        (
+            "5 * * ? * * *",
+            "2017 1 1 0 0 58",
+            "2017 1 1 0 0 2",
+            False
+        ),
+    ])
+    def test_get_next(self, expression, date_1, date_2, expected):
+        obj_expression = CronExpression(expression)
+        awscron_iter = Croniter(obj_expression)
+        result = awscron_iter.executes_between(date_1, date_2)
+        assert result == expected
 
 class TestExpand(object):
     @pytest.mark.parametrize("expression, expected", [
