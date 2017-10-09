@@ -2,53 +2,25 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import, print_function
-import re
 from time import time
 import datetime
-from dateutil.relativedelta import relativedelta
-from dateutil.tz import tzutc
-import calendar
+from datetime import timedelta
+import math
 
-OLD_FIELDS = ['minute', 'hour', 'day_of_month', 'month', 'day_of_week', 'year']
-FIELD_NAMES = ['second', 'minute', 'hour', 'day_of_month', 'month', 'day_of_week', 'year']
-
-re_range_optional_slash = re.compile(r'^([^-]+)-([^-/]+)(/(.*))?$')
-star_or_int_re = re.compile(r'^(\d+|\*)$')
-VALID_LEN_EXPRESSION = [6, 7]
+FIELD_NAMES = [
+    'second', 'minute', 'hour', 'day_of_month', 'month', 'day_of_week', 'year'
+]
 
 RANGES = {
-    'second': {
-        'min': 0,
-        'max': 59
-    },
-    'minute': {
-        'min': 0,
-        'max': 59
-    },
-    'hour': {
-        'min': 0,
-        'max': 23
-    },
-    'day_of_month': {
-        'min': 1,
-        'max': 31,
-        0: 1
-    },
-    'month': {
-        'min': 1,
-        'max': 12,
-        0: 1
-    },
-    'day_of_week': {
-        'min': 1,
-        'max': 7,
-        0: 1
-    },
-    'year': {
-        'min': 1970,
-        'max': 2199
-    }
+    'second': {'min': 0, 'max': 59},
+    'minute': {'min': 0, 'max': 59},
+    'hour': {'min': 0, 'max': 23},
+    'day_of_month': {'min': 1, 'max': 31, 0: 1},
+    'month': {'min': 1, 'max': 12, 0: 1},
+    'day_of_week': {'min': 1, 'max': 7, 0: 1},
+    'year': {'min': 1970, 'max': 2199}
 }
+
 
 class CroniterError(ValueError):
     pass
@@ -102,7 +74,8 @@ class CronExpression(object):
                 '''
             )
 
-        self.expanded_expression, self.day_wk_numbers = self.expand(self.fields)
+        self.expanded_expression, self.day_wk_numbers =\
+            self.expand(self.fields)
         return None
 
     @classmethod
@@ -115,7 +88,8 @@ class CronExpression(object):
         day_wk_numbers = {}
 
         for field_name, field in zip(FIELD_NAMES, fields):
-            expanded_field, field_day_wk_numbers = self.expand_field(field_name, field)
+            expanded_field, field_day_wk_numbers =\
+                self.expand_field(field_name, field)
             expanded_fields.append(expanded_field)
             day_wk_numbers.update(field_day_wk_numbers)
         return expanded_fields, day_wk_numbers
@@ -125,14 +99,15 @@ class CronExpression(object):
         """
             Expands the provided field
         """
-        if field == None:
+        if field is None:
             return [0], {}
 
         field_execution_times = []
 
         values = field.split(',')
         for value in values:
-            value_execution_times, day_wk_numbers = self.expand_value(field_name, value)
+            value_execution_times, day_wk_numbers =\
+                self.expand_value(field_name, value)
             field_execution_times += value_execution_times
 
         field_execution_times.sort()
@@ -238,21 +213,92 @@ class Croniter(object):
 
     def executes_between(self, date_1, date_2):
         datetime_field_names = [
-            'year', 'month', 'day_of_month', 'hour', 'minute', 'second'
+            'year', 'day_of_week', 'month', 'day_of_month', 'hour', 'minute',
+            'second'
         ]
-        date_1 = date_1.split(' ')
-        date_2 = date_2.split(' ')
-        for field_name, d_1, d_2 in zip(datetime_field_names, date_1, date_2):
-            d_1, d_2 = map(int, [d_1, d_2])
-            print(d_1, d_2)
-            d_range = []
-            while d_1%RANGES[field_name]['max'] != d_2%RANGES[field_name]['max']:
-                if d_1%RANGES[field_name]['max'] == 0:
-                    d_range.append(RANGES[field_name]['max'])
-                else:
-                    d_range.append(d_1%RANGES[field_name]['max'])
-                d_1 = d_1+1
-            # if nothing in d_range is in self.obj_expression.expanded_expression.index(field_name):
-                # return False
+        cron_field_names = [
+            'second', 'minute', 'hour', 'day_of_month', 'month', 'day_of_week',
+            'year'
+        ]
+        date_1 = self.split_date(date_1)
+        date_2 = self.split_date(date_2)
 
+        for field_name, d_1, d_2 in zip(datetime_field_names, date_1, date_2):
+            execution_times = self.obj_expression.expanded_expression[
+                cron_field_names.index(field_name)
+            ]
+
+            # If * then it always executes
+            if execution_times == ['*']:
+                continue
+
+            # If day_of_week# then compare cron execution days
+            # with range execution days.
+            elif(
+                field_name == 'day_of_week' and
+                self.obj_expression.day_wk_numbers != {}
+            ):
+                range_day_wk_numbers =\
+                    self.range_day_wk_numbers(date_1, date_2)
+                cron_day_wk_numbers = self.obj_expression.day_wk_numbers
+
+                for weekday in set(range_day_wk_numbers).intersection(
+                    set(cron_day_wk_numbers)
+                ):
+                    if not self.common_element(
+                        cron_day_wk_numbers[weekday],
+                        range_day_wk_numbers[weekday]
+                    ):
+                        return False
+
+            # Else compare cron execution times with range times.
+            else:
+                d_1, d_2 = map(int, [d_1, d_2])
+                d_range = [d_1 % RANGES[field_name]['max']]
+
+                # Cycle from d_1 to d_2
+                while(
+                    d_1 % RANGES[field_name]['max'] !=
+                    d_2 % RANGES[field_name]['max']
+                ):
+                    d_1 = d_1+1
+                    if d_1 % RANGES[field_name]['max'] == 0:
+                        d_range.append(RANGES[field_name]['max'])
+                    else:
+                        d_range.append(d_1 % RANGES[field_name]['max'])
+
+                # If the cron job has no execution time within this range
+                if not self.common_element(execution_times, d_range):
+                    return False
+        # All cron fields have at least 1 execution time within this range
         return True
+
+    def range_day_wk_numbers(self, date_1, date_2):
+        day_wk_numbers = {}
+        date_1 = datetime.datetime(date_1[0], date_1[2], date_1[3])
+        date_2 = datetime.datetime(date_2[0], date_2[2], date_2[3])
+        for date in self.daterange(date_1, date_2):
+            weekday = (date.isoweekday() % 7) + 1
+            if weekday not in day_wk_numbers:
+                day_wk_numbers[weekday] = set()
+            day_wk_numbers[weekday].add(int(math.ceil(float(date.day)/7)))
+        # print(day_wk_numbers)
+        return day_wk_numbers
+
+    def daterange(self, start_date, end_date):
+        for n in range(int((end_date - start_date).days)+1):
+            yield start_date + timedelta(n)
+
+    def split_date(self, date):
+        list_date = list(map(int, date.split(' ')))
+        weekday = (
+            datetime.date(
+                list_date[0],
+                list_date[1],
+                list_date[2]
+            ).isoweekday() % 7) + 1
+        list_date.insert(1, weekday)
+        return list_date
+
+    def common_element(self, list_1, list_2):
+        return any(True for element in list_1 if element in list_2)
