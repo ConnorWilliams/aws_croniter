@@ -30,14 +30,6 @@ class CroniterBadCronError(CroniterError):
     pass
 
 
-class CroniterBadDateError(CroniterError):
-    pass
-
-
-class CroniterNotAlphaError(CroniterError):
-    pass
-
-
 class CronExpression(object):
     CALENDAR = {
         'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
@@ -46,8 +38,7 @@ class CronExpression(object):
         'sat': 7,
     }
 
-    bad_length = 'Exactly 6 or 7 columns has to be specified for iterator' \
-                 'expression.'
+    bad_length = 'Cron expression should be 6 or 7 fields. {} is not.'
 
     def __init__(self, expression):
         expression = expression.split()
@@ -58,7 +49,9 @@ class CronExpression(object):
             second, minute, hour, day_of_month, month, day_of_week, year =\
                 expression
         else:
-            raise CroniterBadCronError(self.bad_length)
+            raise CroniterBadCronError(self.bad_length.format(
+                expression
+            ))
 
         self.fields = [
             second, minute, hour, day_of_month, month, day_of_week, year
@@ -106,9 +99,12 @@ class CronExpression(object):
 
         values = field.split(',')
         for value in values:
-            value_execution_times, day_wk_numbers =\
-                self.expand_value(field_name, value)
-            field_execution_times += value_execution_times
+            try:
+                value_execution_times, day_wk_numbers =\
+                    self.expand_value(field_name, value)
+                field_execution_times += value_execution_times
+            except CroniterBadCronError:
+                print('"{}" is not a valid field value.'.format(field))
 
         field_execution_times.sort()
         return field_execution_times, day_wk_numbers
@@ -158,8 +154,12 @@ class CronExpression(object):
             return [RANGES[field_name]['max']], day_wk_numbers
 
         # If we have * or ?
-        else:
+        elif value in ['*', '?']:
             return '*', day_wk_numbers
+
+        # We dont recognise this input
+        else:
+            raise CroniterBadCronError
 
     @classmethod
     def convert_to_range(self, value, field_name):
@@ -290,15 +290,15 @@ class Croniter(object):
             yield start_date + timedelta(n)
 
     def split_date(self, date):
-        list_date = list(map(int, date.split(' ')))
-        weekday = (
-            datetime.date(
-                list_date[0],
-                list_date[1],
-                list_date[2]
-            ).isoweekday() % 7) + 1
-        list_date.insert(1, weekday)
-        return list_date
+        return [
+            date.year,
+            (date.isoweekday() % 7) + 1,
+            date.month,
+            date.day,
+            date.hour,
+            date.minute,
+            date.second
+        ]
 
     def common_element(self, list_1, list_2):
         return any(True for element in list_1 if element in list_2)
