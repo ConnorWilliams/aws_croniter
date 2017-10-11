@@ -1,5 +1,7 @@
 import pytest
 
+from datetime import datetime
+
 from src.aws_croniter import CronExpression, Croniter
 
 
@@ -7,50 +9,50 @@ class TestExecutesBetween(object):
     @pytest.mark.parametrize("expression, date_1, date_2, expected", [
         (
             "2 * * ? * * *",
-            "2017 1 1 0 0 1",
-            "2017 1 1 0 0 3",
+            datetime(2017, 1, 1, 0, 0, 1),
+            datetime(2017, 1, 1, 0, 0, 3),
             True
         ),
         (
             "5 * * ? * * *",
-            "2017 1 1 0 0 58",
-            "2017 1 1 0 0 2",
+            datetime(2017, 1, 1, 0, 0, 58),
+            datetime(2017, 1, 1, 0, 0, 2),
             False
         ),
         (
             "0 0 * ? * Tue *",
-            "2018 1 1 0 0 0",
-            "2018 1 5 0 0 0",
+            datetime(2018, 1, 1, 0, 0, 0),
+            datetime(2018, 1, 5, 0, 0, 0),
             True
         ),
         (
             "0 0 * ? * Tue *",
-            "2018 1 3 0 0 0",
-            "2018 1 6 0 0 0",
+            datetime(2018, 1, 3, 0, 0, 0),
+            datetime(2018, 1, 6, 0, 0, 0),
             False
         ),
         (
             "0 0 * 4-8 * ? 2017",
-            "2017 1 1 0 0 0",
-            "2018 1 5 0 0 0",
+            datetime(2017, 1, 1, 0, 0, 0),
+            datetime(2018, 1, 5, 0, 0, 0),
             True
         ),
         (
             "* * * ? * Sat 2018",
-            "2018 1 19 0 0 0",
-            "2018 1 22 0 0 0",
+            datetime(2018, 1, 19, 0, 0, 0),
+            datetime(2018, 1, 22, 0, 0, 0),
             True
         ),
         (
             "* * * ? * Sat#3 2018",
-            "2018 1 19 0 0 0",
-            "2018 1 22 0 0 0",
+            datetime(2018, 1, 19, 0, 0, 0),
+            datetime(2018, 1, 22, 0, 0, 0),
             True
         ),
         (
             "* * * ? * Sat#1 2018",
-            "2018 1 19 0 0 0",
-            "2018 1 22 0 0 0",
+            datetime(2018, 1, 19, 0, 0, 0),
+            datetime(2018, 1, 22, 0, 0, 0),
             False
         ),
     ])
@@ -204,7 +206,7 @@ class TestCalendarToNum(object):
             '0 0 * ? * Mon-ThU#1-3 *', 'Mon-ThU#1-3', 'day_of_week', '2-5#1-3'
         ),
     ])
-    def test_expand(self, expression,  value, field_name, expected):
+    def test_expand(self, expression, value, field_name, expected):
         obj_expression = CronExpression(expression)
         result = obj_expression.calendar_to_num(field_name, value)
         assert result == expected
